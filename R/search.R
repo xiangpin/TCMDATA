@@ -105,7 +105,7 @@ search_herb <- function(herb, type){
 #' \dontrun{
 #' # Example usage with a list of gene symbols
 #' genes <- c("TP53", "EGFR", "BRCA1")
-#' herbs_targets <- target_search(genes)
+#' herbs_targets <- search_target(genes)
 #' print(herbs_targets)
 #' }
 #'
@@ -127,7 +127,7 @@ search_target <- function(gene_list){
     tidyr::drop_na()
   
   colnames(herbs_data) <- c("herb", "molecule", "target")
-  rownames(result) <- NULL
+  rownames(herbs_data) <- NULL
   return(herbs_data)
 }
 

@@ -1,3 +1,5 @@
 ^tcmprofiler\.Rproj$
 ^\.Rproj\.user$
 Makefile
+README.Rmd
+README_files

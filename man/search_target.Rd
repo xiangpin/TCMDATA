@@ -21,7 +21,7 @@ based on a provided list of target genes.
 \dontrun{
 # Example usage with a list of gene symbols
 genes <- c("TP53", "EGFR", "BRCA1")
-herbs_targets <- target_search(genes)
+herbs_targets <- search_target(genes)
 print(herbs_targets)
 }
 
