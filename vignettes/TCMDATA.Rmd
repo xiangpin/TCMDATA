@@ -1,0 +1,210 @@
+---
+title: "TCMDATA"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{TCMDATA}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(TCMDATA)
+```
+
+
+## lz
+```{r}
+herbs <- c("灵芝")
+lz <- search_herb(herb = herbs, type = "Herb_cn_name")
+
+set.seed(2025)
+g <- sample(lz$target, 200)
+```
+
+
+## functional enrichment
+```{r}
+library(clusterProfiler)
+x <- enrichGO(g, ont="MF", OrgDb='org.Hs.eg.db', keyType="SYMBOL")
+```
+
+
+## visualizaition
+```{R}
+barplot(x)
+dotplot(x)
+cnetplot(x)
+```
+
+
+## getPPI from test targets
+```{r}
+## 对g取一个subset
+set.seed(2025)
+gg <- sample(g, 50) 
+
+## PPI
+ppi <- clusterProfiler::getPPI(gg, taxID = 9606)
+str(ppi)
+```
+
+## ggtangle network visualizaiton
+```{r}
+library(ggtangle)
+library(ggraph)
+library(tidygraph)
+library(igraph)
+library(dplyr)
+library(aplot)
+library(ggrepel)
+#source("PPI_utils.R")
+
+V(ppi)$degree <- degree(ppi)
+V(ppi)$centrality <- betweenness(ppi)
+
+p1 <- ggtangle::ggplot(ppi, layout = "circle") +
+  geom_edge(alpha = 0.3) +
+  geom_text_repel(aes(label = name), size = 3) +
+  geom_point(aes(color = degree, size = centrality)) + 
+  scale_color_viridis_c() 
+
+print(p1)
+```
+
+## subset hub gene nodes
+根据ppi结果的score来过滤高得分节点来绘图
+```{r}
+## 选取得分0.7及以上
+ppi_hub <- igraph::subgraph.edges(ppi, eids = E(ppi)[score >= 0.7], delete.vertices = TRUE)
+
+p11 <- ggtangle::ggplot(ppi_hub, layout = "kk") +
+  geom_edge(alpha = 0.4) +
+  geom_text_repel(aes(label = name), size = 3) +
+  geom_point(aes(color = degree, size = centrality)) + 
+  scale_color_viridis_c() 
+
+print(p11)
+
+## 如果要呈现核心节点，可以根据节点度数等指标来筛选(该筛选方法已集成与函数'ppi_subset')
+ppi_hub_update <- ppi_subset(ppi_hub, n = 8)
+
+p12 <- ggtangle::ggplot(ppi_hub_update, layout = "kk") +
+  geom_edge(alpha = 0.4) +
+  geom_text_repel(aes(label = name), size = 3) +
+  geom_point(aes(color = degree, size = centrality)) + 
+  scale_color_viridis_c() 
+
+print(p12)
+
+## 组合起来看
+plot_list(p11, p12)
+```
+后续的ppi结果使用ppi_hub(筛选边得分>=0.7)来可视化
+
+## combined with expression matrix
+```{r}
+## 随机生成一个表达矩阵
+expr_df <- data.frame(
+  name = V(ppi_hub)$name,
+  logFC = rnorm(vcount(ppi_hub), 0, 2),
+  group = sample(c("up", "down"), vcount(ppi_hub), replace = TRUE)
+)
+
+## 显示节点基因在seq数据中的上下调表达情况
+p2 <- ggtangle::ggplot(ppi_hub, layout = "circle") %<+% expr_df + 
+  geom_edge(alpha = 0.2) +
+  geom_point(aes(color = logFC, shape = group, size = centrality)) +
+  geom_text_repel(aes(label = name), size = 3) +
+  scale_color_gradient2(low = "blue", mid = "white", high = "red") +
+  theme_void()
+
+print(p2)
+```
+
+
+## using scatterpie in nodes
+```{R}
+library(scatterpie)
+
+## pie_data是随机生成的一个蛋白在不同通路中的打分表(假设有ABCD4个通路)
+pie_data <- data.frame(
+  name = V(ppi_hub)$name,
+  A = runif(vcount(ppi_hub)),
+  B = runif(vcount(ppi_hub)),
+  C = runif(vcount(ppi_hub)),
+  D = runif(vcount(ppi_hub))
+)
+
+p3 <- ggtangle::ggplot(ppi_hub, layout = "circle") %<+% pie_data +
+  geom_edge(alpha = 0.25) +
+  geom_scatterpie(cols = c("A", "B", "C", "D"), color = NA) +
+  geom_text_repel(aes(label = name), size = 3) +
+  coord_fixed()
+
+print(p3)
+```
+
+
+## 使用通路打分函数(计算每个基因在不同通路出现的比例)，从而使用饼图绘制节点情况
+## weight_scale=F(default)，每个通路在该基因的饼图中都是等比例的
+## weight_scale=T，根据通路的p值来更改通路在基因饼图中的比例情况
+```{R}
+## 用subset前的基因,并筛选得分>=0.7
+ppi_new <- getPPI(g, taxID = 9606) %>%
+  ppi_subset()
+
+## default
+pie_data_new <- getPieData(enrich_obj = x, ppi_genes = V(ppi_new)$name, use_weight = F)
+
+p4 <- ggplot(ppi_new, layout = "fr") %<+% pie_data_new +
+  geom_edge(alpha = 0.3) +
+  geom_scatterpie(cols = names(pie_data_new)[-1], color = NA) +
+  geom_text(aes(label = name), size = 2) +
+  coord_fixed() +
+  theme_void()
+
+print(p4)
+
+## 使用p值来修正饼图比例
+pie_data1 <- getPieData(enrich_obj = x, ppi_genes = V(ppi_new)$name, use_weight = T, weight_scale = "logp")
+
+p5 <- ggplot(ppi_new, layout = "fr") %<+% pie_data1 +
+  geom_edge(alpha = 0.3) +
+  geom_scatterpie(cols = names(pie_data1)[-1], color = NA) +
+  geom_text(aes(label = name), size = 2) +
+  coord_fixed() +
+  theme_void()
+
+print(p5)
+
+## 只可视化前几个核心的节点
+ppi_sub <- ppi_subset(ppi_new, n=20)
+
+p6 <- ggplot(ppi_sub, layout = "fr") %<+% pie_data1 +
+  geom_edge(alpha = 0.3) +
+  geom_scatterpie(cols = names(pie_data1)[-1], color = NA) +
+  geom_text(aes(label = name), size = 2) +
+  coord_fixed() +
+  theme_void()
+
+print(p6)
+
+plot_list(p5, p6)
+```
+
+
+
+
+
+
+
+
+
+

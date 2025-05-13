@@ -9,8 +9,20 @@ Depends:
 Imports:
     dplyr,
     rlang,
-    tidyr
+    tidyr,
+    igraph
 License: Artistic-2.0
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
+Suggests: 
+  knitr,
+  rmarkdown,
+  clusterProfiler,
+  ggtangle,
+  ggraph,
+  tidygraph,
+  aplot,
+  ggrepel,
+  scatterpie
+VignetteBuilder: knitr
